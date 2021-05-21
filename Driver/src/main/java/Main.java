@@ -1,8 +1,10 @@
 import java.util.*;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class Main
 {
     private static final Map<String, MockProcess> PROCESS_LIST = new HashMap<>();
+    private static final ReentrantLock RETRIEVE_UPDATE_VAL_LOCK = new ReentrantLock();
     public static void main (String[] args)
     {
         setUp(3);
@@ -25,11 +27,20 @@ public class Main
                     MockProcess senderProcess = PROCESS_LIST.get(sender);
                     MockProcess receiverProcess = PROCESS_LIST.get(receiver);
                     Thread t = new Thread(() -> {
+                        long messageSendLamportClock = -1;
+                        List <Integer> messageSendVectorClock = null;
                         if(Objects.nonNull(senderProcess))
                         {
-                            senderProcess.updateLamportClock(Event.SEND, -1);
-                            senderProcess.updateVectorClock(Event.SEND, null);
-                            senderProcess.updateEventRecordList(Event.SEND);
+                            try
+                            {
+                                RETRIEVE_UPDATE_VAL_LOCK.lock();
+                                senderProcess.updateProcessClocks(Event.SEND, -1, null);
+                                messageSendLamportClock = senderProcess.getLamportClock().getClock();
+                                messageSendVectorClock = new ArrayList<>(senderProcess.getVectorClock().getClock());
+                            }
+                            finally {
+                                RETRIEVE_UPDATE_VAL_LOCK.unlock();
+                            }
                         }
 
                         try
@@ -42,9 +53,7 @@ public class Main
 
                         if(Objects.nonNull(receiverProcess))
                         {
-                            receiverProcess.updateLamportClock(Event.RECEIVE, senderProcess.getLamportClock().getClock());
-                            receiverProcess.updateVectorClock(Event.RECEIVE, senderProcess.getVectorClock().getClock());
-                            receiverProcess.updateEventRecordList(Event.RECEIVE);
+                            receiverProcess.updateProcessClocks(Event.RECEIVE, messageSendLamportClock, messageSendVectorClock);
                         }
                     });
                     t.start();
@@ -58,8 +67,7 @@ public class Main
                     Thread t1 = new Thread(() -> {
                         if(Objects.nonNull(p))
                         {
-                            p.updateLamportClock(Event.INTERNAL, -1); p.updateVectorClock(Event.INTERNAL, null);
-                            p.updateEventRecordList(Event.INTERNAL);
+                            p.updateProcessClocks(Event.INTERNAL, -1, null);
                         }
                     });
                     t1.start();
@@ -71,11 +79,20 @@ public class Main
                     String broadcast = sc.next();
                     MockProcess broadcastSender = PROCESS_LIST.get(broadcast);
                     Thread t2 = new Thread(() -> {
+                        long messageBroadcastLamportClock = -1;
+                        List <Integer> messageBroadcastVectorClock = null;
                         if(Objects.nonNull(broadcastSender))
                         {
-                            broadcastSender.updateLamportClock(Event.SEND, -1);
-                            broadcastSender.updateVectorClock(Event.SEND, null);
-                            broadcastSender.updateEventRecordList(Event.SEND);
+                            try
+                            {
+                                RETRIEVE_UPDATE_VAL_LOCK.lock();
+                                broadcastSender.updateProcessClocks(Event.SEND, -1, null);
+                                messageBroadcastLamportClock = broadcastSender.getLamportClock().getClock();
+                                messageBroadcastVectorClock = new ArrayList<>(broadcastSender.getVectorClock().getClock());
+                            }
+                            finally {
+                                RETRIEVE_UPDATE_VAL_LOCK.unlock();
+                            }
                         }
 
                         try
@@ -86,12 +103,12 @@ public class Main
                             e.printStackTrace();
                         }
 
+                        long finalMessageBroadcastLamportClock = messageBroadcastLamportClock;
+                        List<Integer> finalMessageBroadcastVectorClock = messageBroadcastVectorClock;
                         PROCESS_LIST.forEach((name, broadcastReceiver) -> {
                             if(!name.equals(broadcast))
                             {
-                                broadcastReceiver.updateLamportClock(Event.RECEIVE, broadcastSender.getLamportClock().getClock());
-                                broadcastReceiver.updateVectorClock(Event.RECEIVE, broadcastSender.getVectorClock().getClock());
-                                broadcastReceiver.updateEventRecordList(Event.RECEIVE);
+                                broadcastReceiver.updateProcessClocks(Event.RECEIVE, finalMessageBroadcastLamportClock, finalMessageBroadcastVectorClock);
                             }
                         });
                     });

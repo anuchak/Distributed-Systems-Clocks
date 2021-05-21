@@ -42,33 +42,39 @@ public class MockProcess
         return processName;
     }
 
-    public void updateLamportClock(Event e, long messageClock)
+    public void updateProcessClocks(Event e, long lamportMessageClock, List<Integer> vectorMessageClock)
     {
         switch (e)
         {
             case INTERNAL:
-                lamportClock.updateForInternal();
+                try {
+                    lock.writeLock().lock();
+                    lamportClock.updateForInternal();
+                    vectorClock.updateForInternal();
+                    updateEventRecordList(e);
+                } finally {
+                    lock.writeLock().unlock();
+                }
                 break;
             case SEND:
-                lamportClock.updateForSend();
+                try {
+                    lock.writeLock().lock();
+                    lamportClock.updateForSend();
+                    vectorClock.updateForSend();
+                    updateEventRecordList(e);
+                } finally {
+                    lock.writeLock().unlock();
+                }
                 break;
             case RECEIVE:
-                lamportClock.updateForReceive(messageClock);
-        }
-    }
-
-    public void updateVectorClock(Event e, List<Integer> messageClock)
-    {
-        switch (e)
-        {
-            case INTERNAL:
-                vectorClock.updateForInternal();
-                break;
-            case SEND:
-                vectorClock.updateForSend();
-                break;
-            case RECEIVE:
-                vectorClock.updateForReceive(messageClock);
+                try {
+                    lock.writeLock().lock();
+                    lamportClock.updateForReceive(lamportMessageClock);
+                    vectorClock.updateForReceive(vectorMessageClock);
+                    updateEventRecordList(e);
+                } finally {
+                    lock.writeLock().unlock();
+                }
         }
     }
 
@@ -76,16 +82,10 @@ public class MockProcess
         return eventRecordList;
     }
 
-    public void updateEventRecordList(Event e)
+    private void updateEventRecordList(Event e)
     {
-        try {
-            lock.writeLock().lock();
-            EventRecord record = new EventRecord(processName, e, lamportClock.getClock(), vectorClock.getClock());
-            eventRecordList.add(record);
-        }
-        finally {
-            lock.writeLock().unlock();
-        }
+        EventRecord record = new EventRecord(processName, e, lamportClock.getClock(), vectorClock.getClock());
+        eventRecordList.add(record);
     }
 
 }
