@@ -1,10 +1,11 @@
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class Main
 {
     private static final Map<String, MockProcess> PROCESS_LIST = new HashMap<>();
-    private static final ReentrantLock RETRIEVE_UPDATE_VAL_LOCK = new ReentrantLock();
+    private static final Map <String, ReentrantLock> RETRIEVE_UPDATE_VAL_LOCK = new ConcurrentHashMap<>();
     public static void main (String[] args)
     {
         setUp(3);
@@ -31,15 +32,15 @@ public class Main
                         List <Integer> messageSendVectorClock = null;
                         if(Objects.nonNull(senderProcess))
                         {
+                            RETRIEVE_UPDATE_VAL_LOCK.get(sender).lock();
                             try
                             {
-                                RETRIEVE_UPDATE_VAL_LOCK.lock();
                                 senderProcess.updateProcessClocks(Event.SEND, -1, null);
                                 messageSendLamportClock = senderProcess.getLamportClock().getClock();
                                 messageSendVectorClock = new ArrayList<>(senderProcess.getVectorClock().getClock());
                             }
                             finally {
-                                RETRIEVE_UPDATE_VAL_LOCK.unlock();
+                                RETRIEVE_UPDATE_VAL_LOCK.get(sender).unlock();
                             }
                         }
 
@@ -83,15 +84,15 @@ public class Main
                         List <Integer> messageBroadcastVectorClock = null;
                         if(Objects.nonNull(broadcastSender))
                         {
+                            RETRIEVE_UPDATE_VAL_LOCK.get(broadcast).lock();
                             try
                             {
-                                RETRIEVE_UPDATE_VAL_LOCK.lock();
                                 broadcastSender.updateProcessClocks(Event.SEND, -1, null);
                                 messageBroadcastLamportClock = broadcastSender.getLamportClock().getClock();
                                 messageBroadcastVectorClock = new ArrayList<>(broadcastSender.getVectorClock().getClock());
                             }
                             finally {
-                                RETRIEVE_UPDATE_VAL_LOCK.unlock();
+                                RETRIEVE_UPDATE_VAL_LOCK.get(broadcast).unlock();
                             }
                         }
 
@@ -156,6 +157,7 @@ public class Main
             name = sc.next();
             MockProcess p = new MockProcess(name, i, totalProcess);
             PROCESS_LIST.put(name, p);
+            RETRIEVE_UPDATE_VAL_LOCK.put(name, new ReentrantLock());
         }
     }
 
