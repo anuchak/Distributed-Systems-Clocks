@@ -47,8 +47,8 @@ public class MockProcess
         switch (e)
         {
             case INTERNAL:
+                lock.writeLock().lock();
                 try {
-                    lock.writeLock().lock();
                     lamportClock.updateForInternal();
                     vectorClock.updateForInternal();
                     updateEventRecordList(e);
@@ -57,8 +57,8 @@ public class MockProcess
                 }
                 break;
             case SEND:
+                lock.writeLock().lock();
                 try {
-                    lock.writeLock().lock();
                     lamportClock.updateForSend();
                     vectorClock.updateForSend();
                     updateEventRecordList(e);
@@ -67,8 +67,8 @@ public class MockProcess
                 }
                 break;
             case RECEIVE:
+                lock.writeLock().lock();
                 try {
-                    lock.writeLock().lock();
                     lamportClock.updateForReceive(lamportMessageClock);
                     vectorClock.updateForReceive(vectorMessageClock);
                     updateEventRecordList(e);
